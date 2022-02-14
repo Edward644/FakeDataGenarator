@@ -59,7 +59,7 @@ async function main() {
   }
 
   await Promise.all(writes);
-  logger.log(`Duration: ${startTime.fromNow(true)}`);
+  console.log(`Duration: ${startTime.fromNow(true)}`);
 }
 
 function getNewFileName(original, docNumber) {

@@ -29,7 +29,7 @@ function writeStreamInit(rows, offset) {
 }
 
 function writeStreamClose() {
-  return "</data>";
+  return "</response>";
 }
 
 export default DataGenarator;
