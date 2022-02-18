@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 
-import emailProviders from "../../randomData/emailProviders.js";
+import emailProviders from "../../../randomData/emailProviders.js";
 
 import AddressGenarator from "./address.js";
 

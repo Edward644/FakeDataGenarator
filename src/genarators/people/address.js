@@ -1,5 +1,5 @@
-import streets from "../../randomData/streets.js";
-import towns from "../../randomData/towns.js";
+import streets from "../../../randomData/streets.js";
+import towns from "../../../randomData/towns.js";
 const alpahbet = [
   "A",
   "B",

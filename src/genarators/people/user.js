@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import { v4 as uuid } from "uuid";
 
-import { firstnames, lastnames } from "../../randomData/names.js";
+import { firstnames, lastnames } from "../../../randomData/names.js";
 
 import ContactDetailsGenarator from "./contactDetails.js";
 import UserDescriptionGenarator from "./description.js";

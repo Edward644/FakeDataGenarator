@@ -6,7 +6,7 @@ dayjs.extend(relativeTime);
 
 import parseArgs from "./argsParser.js";
 
-import UserGenerator from "./genarators/user.js";
+import UserGenerator from "./genarators/people/user.js";
 
 import JsonGenarator from "./transformers/json.js";
 import JsonlGenarator from "./transformers/jsonL.js";
@@ -64,8 +64,8 @@ async function main() {
 
 function getNewFileName(original, docNumber) {
   let path = original.split("/");
-  let filename = path.at(-1).split(".");
-  return filename.splice(1, 0, docNumber);
+  let filename = path.splice(-1).split(".").splice(1, 0, docNumber);
+  return [...path, filename].join("/");
 }
 
 function getFileGenerator(type) {
