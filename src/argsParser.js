@@ -24,10 +24,11 @@ function validateArgs(args, mode) {
 }
 
 function setMaxPerDoc(args, _args) {
-  args.maxObjectsPerPage =
+  let val =
     getValue(_args, "-p") ??
     getValue(_args, "--max-per-page") ??
     args.maxObjectCount;
+  args.maxObjectsPerPage = +val;
 }
 
 function setOutputFile(args, _args) {
@@ -38,8 +39,8 @@ function setOutputFile(args, _args) {
 }
 
 function setMaxGeneration(args, _args) {
-  args.maxObjectCount =
-    getValue(_args, "-M") ?? getValue(_args, "--max") ?? 1000;
+  let val = getValue(_args, "-M") ?? getValue(_args, "--max") ?? 1000;
+  args.maxObjectCount = +val.replace(/_/g, "");
 }
 
 function validateMode(mode) {
