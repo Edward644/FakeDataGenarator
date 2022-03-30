@@ -5,17 +5,17 @@ class DataGenarator extends Readable {
     super(options);
     this.dataGenerator = dataGenerator;
     this.rows = rows;
+    this.count = 0;
   }
 
   _read() {
-    const transform = (data) => JSON.stringify(data) + "\n";
-
-    for (let i = 0; i < this.rows; i++) {
+    if (this.count++ < this.rows) {
       let data = this.dataGenerator.create();
-      this.push(transform(data));
+      this.push(JSON.stringify(data) + "\n");
+    } else {
+      this.push(null);
+      this.count = 0;
     }
-
-    this.push(null);
   }
 }
 

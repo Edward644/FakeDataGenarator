@@ -6,22 +6,22 @@ class DataGenarator extends Readable {
     this.dataGenerator = dataGenerator;
     this.rows = rows;
     this.offset = offset;
+    this.count = 0;
   }
 
   _read() {
-    this.push(writeStreamInit(this.rows, this.offset));
-
-    const transform = (data) => "    " + JSON.stringify(data);
-
-    for (let i = 0; i < this.rows; i++) {
+    if (!this.count) {
+      this.push(writeStreamInit(this.rows, this.offset));
+    } else if (this.count++ < this.rows) {
       let data = this.dataGenerator.create();
-      this.push(transform(data));
+      this.push("    " + JSON.stringify(data));
       if (i === this.rows - 1) this.push("\n");
       else this.push(",\n");
+    } else {
+      this.push(writeStreamClose());
+      this.push(null);
+      this.count = 0
     }
-
-    this.push(writeStreamClose());
-    this.push(null);
   }
 }
 

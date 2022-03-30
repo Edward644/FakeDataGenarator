@@ -7,20 +7,22 @@ class DataGenarator extends Readable {
     this.dataGenerator = dataGenerator;
     this.rows = rows;
     this.builder = new XMLBuilder();
+    this.count = 0;
   }
 
   _read() {
-    this.push(writeStreamInit());
+    if (!this.count) {
+      this.push(writeStreamInit());
+    } else if (this.count++ < this.rows) {
+      const transform = (data) => this.builder.build({ data }) + "\n";
 
-    const transform = (data) => this.builder.build({ data }) + "\n";
-
-    for (let i = 0; i < this.rows; i++) {
       let data = this.dataGenerator.create();
       this.push(transform(data));
+    } else {
+      this.push(writeStreamClose());
+      this.push(null);
+      this.count = 0;
     }
-
-    this.push(writeStreamClose());
-    this.push(null);
   }
 }
 
