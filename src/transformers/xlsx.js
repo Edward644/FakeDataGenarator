@@ -11,10 +11,13 @@ class DataGenarator extends Readable {
   _read() {
     if (!this.count) {
       this.push(writeStreamInit());
-    } else if (this.count++ < this.rows) {
+    }
+    
+    if (this.count < this.rows) {
       const transform = (data) => this.builder.build({ data }) + "\n";
       let data = this.dataGenerator.create();
       this.push(transform(data));
+      this.count++;
     } else {
       this.push(writeStreamClose());
       this.push(null);
