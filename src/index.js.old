@@ -1,0 +1,104 @@
+import { createWriteStream } from "fs";
+
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime.js";
+dayjs.extend(relativeTime);
+
+import parseArgs from "./argsParser.js";
+
+import UserGenerator from "./genarators/people/generators/user.js";
+
+import JsonGenarator from "./transformers/json.js";
+import JsonlGenarator from "./transformers/jsonL.js";
+import CsvGenarator from "./transformers/csv.js";
+import XmlGenarator from "./transformers/xml.js";
+
+import Logger from "./logger.js";
+const logger = new Logger();
+
+const startTime = dayjs();
+
+const { ordered, flatten, mode, outputFile, maxItems, maxItemsPerDocument } =
+  parseArgs();
+
+async function main() {
+  const fileGenarator = getFileGenerator(mode);
+
+  const docsRequired = Math.ceil(maxItems / maxItemsPerDocument);
+
+  let offset = 0;
+
+  let writes = [];
+
+  let minAge = 21;
+  const ageRange = Math.ceil(80 / docsRequired);
+
+  for (let docNumber = 0; docNumber < docsRequired; docNumber++) {
+    const userGenerator = new UserGenerator({
+      flatten,
+      minAge,
+      maxAge: minAge + ageRange,
+    });
+
+    let fileName = getFileName(docsRequired, docNumber);
+
+    let writeStream = createWriteStream(fileName);
+
+    const rows = Math.min(maxItemsPerDocument, maxItems - offset);
+
+    const readstream = new fileGenarator(userGenerator, {
+      rows,
+      offset,
+    });
+
+    readstream.pipe(writeStream);
+
+    writes.push(
+      new Promise((res) =>
+        writeStream.on("finish", () => {
+          logger.log(`Created file ${fileName}`);
+          res();
+        })
+      )
+    );
+
+    offset += maxItemsPerDocument;
+    minAge += ageRange;
+  }
+
+  await Promise.all(writes);
+  console.log(`Duration: ${startTime.fromNow(true)}`);
+}
+
+function getFileName(docsRequired, docNumber) {
+  return docsRequired > 1 ? getNewFileName(outputFile, docNumber) : outputFile;
+  // return getNewFileName(outputFile, docNumber);
+}
+
+function getNewFileName(original, docNumber) {
+  let path = original.split("/");
+
+  if (path.at(-1).includes(".")) {
+    let filename = path.splice(-1)[0];
+    filename = filename.split(".");
+    filename[0] += docNumber;
+    return [...path, filename.join(".")].join("/");
+  } else {
+    return (path += `data(${docNumber}).${mode}`);
+  }
+}
+
+function getFileGenerator(type) {
+  switch (type) {
+    case "jsonl":
+      return JsonlGenarator;
+    case "csv":
+      return CsvGenarator;
+    case "xml":
+      return XmlGenarator;
+    default:
+      return JsonGenarator;
+  }
+}
+
+await main();

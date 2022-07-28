@@ -1,84 +1,71 @@
+import threads from "worker_threads";
 import { createWriteStream } from "fs";
-
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime.js";
-dayjs.extend(relativeTime);
+import { promisify } from "util";
 
 import parseArgs from "./argsParser.js";
 
-import UserGenerator from "./genarators/people/user.js";
+console.time();
 
-import JsonGenarator from "./transformers/json.js";
-import JsonlGenarator from "./transformers/jsonL.js";
-import CsvGenarator from "./transformers/csv.js";
-import XmlGenarator from "./transformers/xml.js";
+const {
+  ordered,
+  flatten,
+  mode,
+  outputFile,
+  maxItems,
+  maxItemsPerDocument,
+  maxThreads,
+} = parseArgs();
 
-import Logger from "./logger.js";
-const logger = new Logger();
+const writeStream = createWriteStream(outputFile);
 
-async function main() {
-  let startTime = dayjs();
-  const args = parseArgs();
+writeStream.on("error", (err) => {
+  console.error(err);
+});
 
-  let maxRowsTotal = args.maxObjectCount;
-  let maxRowsPerDoc = args.maxObjectsPerPage;
+const a = promisify(createWorker);
 
-  let docsRequired = Math.ceil(args.maxObjectCount / args.maxObjectsPerPage);
+const rowsPerThread = Math.floor(maxItems / maxThreads);
 
-  let offset = 0;
+let workers = [];
 
-  let writes = [];
-
-  let fileGenarator = getFileGenerator(args.mode);
-
-  const userGenerator = new UserGenerator();
-
-  for (let docNumber = 0; docNumber < docsRequired; docNumber++) {
-    let fileName =
-      docsRequired > 1
-        ? getNewFileName(args.outputFile, docNumber)
-        : args.outputFile;
-
-    let writeStream = createWriteStream(fileName);
-
-    const rows = Math.min(maxRowsPerDoc, maxRowsTotal - offset);
-
-    const readstream = new fileGenarator(userGenerator, { rows, offset });
-    readstream.pipe(writeStream);
-
-    writes.push(
-      new Promise((res) =>
-        writeStream.on("finish", () => {
-          logger.log(`Created file ${fileName}`);
-          res();
-        })
-      )
-    );
-
-    offset += maxRowsPerDoc;
-  }
-
-  await Promise.all(writes);
-  console.log(`Duration: ${startTime.fromNow(true)}`);
+for (let i = 1; i < maxThreads; i++) {
+  workers.push(a(rowsPerThread));
 }
 
-function getNewFileName(original, docNumber) {
-  let path = original.split("/");
-  let filename = path.splice(-1).split(".").splice(1, 0, docNumber);
-  return [...path, filename].join("/");
+workers.push(a(rowsPerThread + (maxItems % maxThreads)));
+
+try {
+  await Promise.all(workers);
+  writeStream.end();
+  await new Promise((res) => writeStream.on("close", () => res()));
+} catch (e) {
+  console.error(e);
+  workers.forEach((w) => w.terminate());
+} finally {
+  console.timeEnd();
 }
 
-function getFileGenerator(type) {
-  switch (type) {
-    case "jsonl":
-      return JsonlGenarator;
-    case "csv":
-      return CsvGenarator;
-    case "xml":
-      return XmlGenarator;
-    default:
-      return JsonGenarator;
-  }
-}
+function createWorker(maxCreate, cb) {
+  const worker = new threads.Worker("./src/genarators/userGenerator.js", {
+    workerData: { maxCreate },
+  });
 
-main();
+  worker.on("message", (data) => {
+    try {
+      if (!data) {
+        worker.terminate();
+        cb();
+      } else {
+        let bufferFull = writeStream.write(data);
+        if (bufferFull) {
+          worker.postMessage("pause");
+          writeStream.once("drain", () => worker.postMessage("resume"));
+        }
+      }
+    } catch (e) {
+      cb(e);
+    }
+  });
+
+  worker.on("error", (err) => console.error(err));
+}
