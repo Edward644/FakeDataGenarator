@@ -1,7 +1,7 @@
 import { Readable } from "stream";
 import { XMLBuilder } from "fast-xml-parser";
 
-class DataGenarator extends Readable {
+export default class DataGenarator extends Readable {
   constructor(dataGenerator, { rows, ...options }) {
     super(options);
     this.dataGenerator = dataGenerator;
@@ -10,31 +10,17 @@ class DataGenarator extends Readable {
     this.count = 0;
   }
 
-  _read() {
-    if (!this.count) {
-      this.push(writeStreamInit());
-    }
+  _read(size) {
+    let chunk = "";
 
-    if (this.count < this.rows) {
-      const transform = (data) => this.builder.build({ data }) + "\n";
-
+    while (chunk.length < size && this.count < this.rows) {
       let data = this.dataGenerator.create();
-      this.push(transform(data));
+      chunk += this.builder.build({ data }) + "\n";
       this.count++;
-    } else {
-      this.push(writeStreamClose());
-      this.push(null);
-      this.count = 0;
     }
+
+    this.push(chunk);
+
+    if (this.count >= this.rows) this.push(null);
   }
 }
-
-function writeStreamInit(rows, offset) {
-  return '<?xml version="1.0" encoding="UTF-8"?>\n<response>\n';
-}
-
-function writeStreamClose() {
-  return "</response>";
-}
-
-export default DataGenarator;

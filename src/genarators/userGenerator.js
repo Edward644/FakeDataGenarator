@@ -1,39 +1,27 @@
 import threads from "worker_threads";
 import UserGenerator from "./people/user.js";
-import { EventEmitter } from "events";
+// import { EventEmitter } from "events";
+import * as reader from "../transformers/index.js";
 
 if (!threads.isMainThread) {
-  const ee = new EventEmitter();
+  const {
+    rows = 100,
+    ordered = false,
+    flatten = false,
+    mode = "jsonl",
+  } = threads.workerData ?? {};
 
-  threads.parentPort.on("message", (val) => {
-    if (val === "pause") paused = true;
-    else if (val === "resume") {
-      paused = false;
-      ee.emit("resume");
+  const dataGenerator = new UserGenerator({});
+  const readStream = new reader[mode](dataGenerator, { rows });
+
+  threads.parentPort.on("message", ({ message, size }) => {
+    switch (message) {
+      case "read":
+        const data = readStream.read(size);
+        threads.parentPort.postMessage(data);
+        break;
     }
   });
 
-  const userGenerator = new UserGenerator({});
-
-  const { maxCreate = 1_000_000 } = threads.workerData ?? {};
-
-  let paused = false;
-  let count = 0;
-
-  while (count < maxCreate) {
-    if (paused) await new Promise((res) => ee.once("resume", res));
-    const batchCount = Math.min(10000, maxCreate - count);
-    count += batchCount;
-
-    let batch = [];
-    for (let i = 0; i < batchCount; i++) {
-      batch.push(userGenerator.create());
-    }
-
-    threads.parentPort.postMessage(
-      batch.map((r) => JSON.stringify(r)).join("\n") + "\n"
-    );
-  }
-
-  threads.parentPort.postMessage("");
+  console.log("Worker Started");
 }

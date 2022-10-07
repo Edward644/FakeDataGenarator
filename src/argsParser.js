@@ -8,12 +8,12 @@ function parseArgs() {
   }
 
   args.ordered = getOrdered(_args);
-  args.mode = getMode(_args) ?? "json";
+  args.mode = getMode(_args) ?? "jsonl";
   args.flatten = getFlatten(_args);
   args.outputFile = getOutputFile(_args) ?? `dataGenarator.${args.mode}`;
   args.maxItems = getMaxItems(_args) || 1000;
   args.maxItemsPerDocument = getMaxItemsPerDocument(_args) || args.maxItems;
-  args.maxThreads = getMaxThreads(_args) || 2;
+  args.maxThreads = Math.max(getMaxThreads(_args) || 1, 1);
 
   return args;
 }

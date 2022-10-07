@@ -1,8 +1,28 @@
-import threads from "worker_threads";
 import { createWriteStream } from "fs";
-import { promisify } from "util";
+import { Readable, PassThrough } from "stream";
+import { pipeline } from "stream/promises";
 
 import parseArgs from "./argsParser.js";
+import Worker from "./worker.js";
+
+const merge = (streams) => {
+  let pass = new PassThrough();
+  pass.setMaxListeners(streams.length + 2);
+  let waiting = streams.length;
+
+  pass.push('<?xml version="1.0" encoding="UTF-8"?>\n<response>\n');
+
+  for (let stream of streams) {
+    pass = stream.pipe(pass, { end: false });
+    stream.once("end", () => {
+      if (--waiting === 0) {
+        pass.push("</response>");
+        pass.emit("end");
+      }
+    });
+  }
+  return pass;
+};
 
 console.time();
 
@@ -22,50 +42,18 @@ writeStream.on("error", (err) => {
   console.error(err);
 });
 
-const a = promisify(createWorker);
-
-const rowsPerThread = Math.floor(maxItems / maxThreads);
-
-let workers = [];
-
-for (let i = 1; i < maxThreads; i++) {
-  workers.push(a(rowsPerThread));
-}
-
-workers.push(a(rowsPerThread + (maxItems % maxThreads)));
-
 try {
-  await Promise.all(workers);
-  writeStream.end();
-  await new Promise((res) => writeStream.on("close", () => res()));
+  const rows = Math.floor(maxItems / maxThreads);
+
+  let readStream = merge(
+    Array.from(new Array(maxThreads)).map(
+      () => new Worker({ rows, ordered, flatten, mode })
+    )
+  );
+
+  await pipeline(readStream, writeStream);
 } catch (e) {
   console.error(e);
-  workers.forEach((w) => w.terminate());
 } finally {
   console.timeEnd();
-}
-
-function createWorker(maxCreate, cb) {
-  const worker = new threads.Worker("./src/genarators/userGenerator.js", {
-    workerData: { maxCreate },
-  });
-
-  worker.on("message", (data) => {
-    try {
-      if (!data) {
-        worker.terminate();
-        cb();
-      } else {
-        let bufferFull = writeStream.write(data);
-        if (bufferFull) {
-          worker.postMessage("pause");
-          writeStream.once("drain", () => worker.postMessage("resume"));
-        }
-      }
-    } catch (e) {
-      cb(e);
-    }
-  });
-
-  worker.on("error", (err) => console.error(err));
 }
