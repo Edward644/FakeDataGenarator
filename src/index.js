@@ -1,84 +1,59 @@
 import { createWriteStream } from "fs";
-
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime.js";
-dayjs.extend(relativeTime);
+import { Readable, PassThrough } from "stream";
+import { pipeline } from "stream/promises";
 
 import parseArgs from "./argsParser.js";
+import Worker from "./worker.js";
 
-import UserGenerator from "./genarators/people/user.js";
+const merge = (streams) => {
+  let pass = new PassThrough();
+  pass.setMaxListeners(streams.length + 2);
+  let waiting = streams.length;
 
-import JsonGenarator from "./transformers/json.js";
-import JsonlGenarator from "./transformers/jsonL.js";
-import CsvGenarator from "./transformers/csv.js";
-import XmlGenarator from "./transformers/xml.js";
+  pass.push('<?xml version="1.0" encoding="UTF-8"?>\n<response>\n');
 
-import Logger from "./logger.js";
-const logger = new Logger();
-
-async function main() {
-  let startTime = dayjs();
-  const args = parseArgs();
-
-  let maxRowsTotal = args.maxObjectCount;
-  let maxRowsPerDoc = args.maxObjectsPerPage;
-
-  let docsRequired = Math.ceil(args.maxObjectCount / args.maxObjectsPerPage);
-
-  let offset = 0;
-
-  let writes = [];
-
-  let fileGenarator = getFileGenerator(args.mode);
-
-  const userGenerator = new UserGenerator();
-
-  for (let docNumber = 0; docNumber < docsRequired; docNumber++) {
-    let fileName =
-      docsRequired > 1
-        ? getNewFileName(args.outputFile, docNumber)
-        : args.outputFile;
-
-    let writeStream = createWriteStream(fileName);
-
-    const rows = Math.min(maxRowsPerDoc, maxRowsTotal - offset);
-
-    const readstream = new fileGenarator(userGenerator, { rows, offset });
-    readstream.pipe(writeStream);
-
-    writes.push(
-      new Promise((res) =>
-        writeStream.on("finish", () => {
-          logger.log(`Created file ${fileName}`);
-          res();
-        })
-      )
-    );
-
-    offset += maxRowsPerDoc;
+  for (let stream of streams) {
+    pass = stream.pipe(pass, { end: false });
+    stream.once("end", () => {
+      if (--waiting === 0) {
+        pass.push("</response>");
+        pass.emit("end");
+      }
+    });
   }
+  return pass;
+};
 
-  await Promise.all(writes);
-  console.log(`Duration: ${startTime.fromNow(true)}`);
+console.time();
+
+const {
+  ordered,
+  flatten,
+  mode,
+  outputFile,
+  maxItems,
+  maxItemsPerDocument,
+  maxThreads,
+} = parseArgs();
+
+const writeStream = createWriteStream(outputFile);
+
+writeStream.on("error", (err) => {
+  console.error(err);
+});
+
+try {
+  const rows = Math.floor(maxItems / maxThreads);
+
+  let readStream = merge(
+    Array.from(new Array(maxThreads)).map(
+      () => new Worker({ rows, ordered, flatten, mode })
+    )
+  );
+
+  await pipeline(readStream, writeStream);
+} catch (e) {
+  console.error(e);
+} finally {
+  console.timeEnd();
 }
-
-function getNewFileName(original, docNumber) {
-  let path = original.split("/");
-  let filename = path.splice(-1).split(".").splice(1, 0, docNumber);
-  return [...path, filename].join("/");
-}
-
-function getFileGenerator(type) {
-  switch (type) {
-    case "jsonl":
-      return JsonlGenarator;
-    case "csv":
-      return CsvGenarator;
-    case "xml":
-      return XmlGenarator;
-    default:
-      return JsonGenarator;
-  }
-}
-
-main();

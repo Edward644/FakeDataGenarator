@@ -4,65 +4,49 @@ function parseArgs() {
 
   if (_args.indexOf("-h") !== -1 || _args.indexOf("--help") !== -1) {
     printHelp();
-    process.exit();
+    process.exit(); // Ends program execution
   }
 
-  setOutputFile(args, _args); // Get and set output file
-  setMaxGeneration(args, _args); // Get and set the number of objects to be created
-  setMaxPerDoc(args, _args); // Get and set the max number of objects to be written to a single file
-
-  let mode = getValue(_args, "-m") ?? getValue(_args, "--mode") ?? "json";
-  validateArgs(args, mode); // Run validations
+  args.ordered = getOrdered(_args);
+  args.mode = getMode(_args) ?? "jsonl";
+  args.flatten = getFlatten(_args);
+  args.outputFile = getOutputFile(_args) ?? `dataGenarator.${args.mode}`;
+  args.maxItems = getMaxItems(_args) || 1000;
+  args.maxItemsPerDocument = getMaxItemsPerDocument(_args) || args.maxItems;
+  args.maxThreads = Math.max(getMaxThreads(_args) || 1, 1);
 
   return args;
 }
 
-function validateArgs(args, mode) {
-  args.mode = validateMode(mode);
-  args.maxObjectCount = validateNumber(args.maxObjectCount);
-  args.maxObjectsPerPage = validateNumber(args.maxObjectsPerPage);
+function getOrdered(args) {
+  return args.indexOf("--ordered") != -1;
 }
 
-function setMaxPerDoc(args, _args) {
-  let val = getValue(_args, "-p") ?? getValue(_args, "--max-per-page") ?? "";
-  args.maxObjectsPerPage = +val.replace(/_/g, "") || args.maxObjectCount;
+function getFlatten(args) {
+  return args.indexOf("--flatten") != -1 || args.indexOf("-f") != -1;
 }
 
-function setOutputFile(args, _args) {
-  args.outputFile =
-    getValue(_args, "-o") ??
-    getValue(_args, "--output") ??
-    `dataGenarator.${args.mode}`;
+function getMode(args) {
+  return getValue(args, "-m") ?? getValue(args, "--mode");
 }
 
-function setMaxGeneration(args, _args) {
+function getOutputFile(_args) {
+  return getValue(_args, "-o") ?? getValue(_args, "--output-dest");
+}
+
+function getMaxItems(_args) {
   let val = getValue(_args, "-M") ?? getValue(_args, "--max") ?? "";
-  args.maxObjectCount = +val.replace(/_/g, "") || 1000;
+  return +val.replace(/_/g, "");
 }
 
-function validateMode(mode) {
-  switch (mode) {
-    case "json":
-      return "json";
-    case "jsonl":
-      return "jsonl";
-    case "csv":
-      return "csv";
-    case "xml":
-      return "xml";
-    default:
-      throw new Error("Mode not valid");
-  }
+function getMaxItemsPerDocument(args) {
+  let val = getValue(args, "-p") ?? getValue(args, "--max-per-doc") ?? "";
+  return +val.replace(/_/g, "");
 }
 
-function validateNumber(value, propName) {
-  if (!Number.isInteger(+value)) {
-    throw new TypeError(
-      `${propName} not valid: expected an integer, got ${value}`
-    );
-  } else {
-    return +value;
-  }
+function getMaxThreads(args) {
+  let val = getValue(args, "--threads") ?? "";
+  return +val.replace(/_/g, "");
 }
 
 function getValue(args, arg) {
@@ -80,9 +64,11 @@ function printHelp() {
 ARGS
 \t-h, --help            Print this help page
 \t-m, --mode            Data type to save as. Default=json [json, csv, jsonl, xml]
-\t-o, --output          Path of file to save to. Default=dataGenarator.{mode type}
+\t-o, --output-dest          Output directory. Default=output/
 \t-M, --max             The maximum number of rows/items across all documents. Default=1000
-\t-p, --max-per-page    The maximum number of rows/items per document. Default=Infinity
+\t-p, --max-per-doc    The maximum number of rows/items per document. Default=Infinity
+\t--ordered             Will order the data.
+\t--flatten             Will flatten the data.
   `);
 }
 
