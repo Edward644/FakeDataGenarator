@@ -17,9 +17,8 @@ export default class Worker extends Readable {
 
     this.#worker.on("message", (chunk) => {
       this.push(chunk);
-      if (chunk === null) {
-        this.#worker.terminate();
-      }
+
+      if (chunk === null) this.#worker.terminate();
     });
   }
 
